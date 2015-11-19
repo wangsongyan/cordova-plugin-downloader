@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<plugin id="cordova-plugin-downloader" version="1.0.0" 
+        xmlns="http://apache.org/cordova/ns/plugins/1.0"
+        xmlns:android="http://schemas.android.com/apk/res/android">
+    <name>Downloader</name>
+    <description>android dwonloader plugin for cordova</description>
+    <js-module name="Downloader" src="www/download.js">
+        <clobbers target="Download"/>
+    </js-module>
+    <platform name="android">
+        <config-file parent="/*" target="res/xml/config.xml">
+            <feature name="Downloader">
+                <param name="android-package" value="org.apache.cordova.downloader.Downloader"/>
+            </feature>
+        </config-file>
+        <source-file src="src/android/Downloader.java" target-dir="src/org/apache/cordova/downloader"/>
+        <source-file src="src/android/DownloadCompleteReceiver.java" target-dir="src/org/apache/cordova/downloader"/>
+    </platform>
+</plugin>

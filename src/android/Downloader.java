@@ -53,27 +53,40 @@ public class Downloader extends CordovaPlugin {
         public void handleMessage(Message msg) {
             switch (msg.what) {
                 case GET_FILEINFO_SUCCESS:
-                    AlertDialog.Builder builder = new AlertDialog.Builder(Downloader.this.cordova.getActivity());
                     final Map<String,String> map = (Map<String,String>)msg.obj;
-                    builder.setMessage("确认下载文件？\n文件名："+map.get("fileName")+"\n文件大小："+(map.get("length")==null?"未知大小":map.get("length")));
-                    builder.setTitle("提示ʾ");
-                    builder.setPositiveButton("确定", new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialog, int which) {
-                            Message msg1 = new Message();
-                            msg1.what=DOWNLOAD_FILE;
-                            msg1.obj=map;
-                            myHandler.sendMessage(msg1);
-                            dialog.dismiss();
-                        }
-                    });
-                    builder.setNegativeButton("取消", new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialog, int which) {
-                            dialog.dismiss();
-                        }
-                    });
-                    builder.create().show();
+                    if(map == null || map.get("fileName")==null){
+                        AlertDialog.Builder builder = new AlertDialog.Builder(Downloader.this.cordova.getActivity());
+                        builder.setMessage("获取文件信息失败！");
+                        builder.setTitle("提示ʾ");
+                        builder.setPositiveButton("确定", new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                dialog.dismiss();
+                            }
+                        });
+                        builder.create().show();
+                    }else {
+                        AlertDialog.Builder builder = new AlertDialog.Builder(Downloader.this.cordova.getActivity());
+                        builder.setMessage("确认下载文件？\n文件名：" + map.get("fileName") + "\n文件大小：" + (map.get("length") == null ? "未知大小" : map.get("length")));
+                        builder.setTitle("提示ʾ");
+                        builder.setPositiveButton("确定", new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                Message msg1 = new Message();
+                                msg1.what = DOWNLOAD_FILE;
+                                msg1.obj = map;
+                                myHandler.sendMessage(msg1);
+                                dialog.dismiss();
+                            }
+                        });
+                        builder.setNegativeButton("取消", new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                dialog.dismiss();
+                            }
+                        });
+                        builder.create().show();
+                    }
                     break;
                 case DOWNLOAD_FILE:
                     Map<String,String> map1 = (Map<String,String>)msg.obj;

@@ -7,6 +7,7 @@ import org.apache.cordova.CordovaPlugin;
 
 import android.app.AlertDialog;
 import android.app.DownloadManager;
+import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.database.Cursor;
@@ -47,12 +48,19 @@ public class Downloader extends CordovaPlugin {
 
     private DownloadManager manager ;
 
+    private ProgressDialog progressDialog;
+
     private String session;
 
     private Handler myHandler = new Handler() {
         public void handleMessage(Message msg) {
             switch (msg.what) {
                 case GET_FILEINFO_SUCCESS:
+
+                    if(progressDialog != null){
+                        progressDialog.dismiss();
+                    }
+
                     final Map<String,String> map = (Map<String,String>)msg.obj;
                     if(map == null || map.get("fileName")==null){
                         AlertDialog.Builder builder = new AlertDialog.Builder(Downloader.this.cordova.getActivity());
@@ -117,6 +125,9 @@ public class Downloader extends CordovaPlugin {
     private void download(Context context , final CallbackContext callbackContext,String url){
         CookieManager cookieManager = CookieManager.getInstance();
         session = cookieManager.getCookie(url);
+
+        //显示ProgressDialog
+        progressDialog = ProgressDialog.show(Downloader.this.cordova.getActivity(), "获取数据中...", "请稍后...", true, false);
 
         final String tempUrl = url;
         new Thread(new Runnable() {
@@ -193,7 +204,7 @@ public class Downloader extends CordovaPlugin {
                 return null;
             }
             conn.setRequestProperty("Cookie", session);
-            conn.connect();
+            //conn.connect();
 
             for (Map.Entry<String, List<String>> header : conn.getHeaderFields().entrySet()) {
                 if(header.getKey()==null) continue;
@@ -210,7 +221,6 @@ public class Downloader extends CordovaPlugin {
         }catch (Exception e){
 
         }
-        conn.disconnect();
         map.put("url",url);
         return map;
     }

@@ -1,5 +1,7 @@
 package org.apache.cordova.downloader;
 
+import org.apache.cordova.CordovaInterface;
+import org.apache.cordova.CordovaWebView;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.apache.cordova.CallbackContext;
@@ -10,6 +12,8 @@ import android.app.DownloadManager;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Environment;
@@ -32,7 +36,15 @@ import java.util.Map;
  */
 public class Downloader extends CordovaPlugin {
 
+    private static final String TAG = "Downloader";
+
     private static final String PLUGIN_ACTION = "download";
+
+    private Context context;
+
+    private SharedPreferences sharedPreferences;
+
+    private static final String EXTERNAL_DIR = "Deputy";
 
     /**
      * 获取文件信息成功
@@ -43,6 +55,11 @@ public class Downloader extends CordovaPlugin {
      * 下载文件
      * */
     private static final int DOWNLOAD_FILE = 300;
+
+    /**
+     * 打开文件
+     * */
+    private static final int OPEN_FILE = 400;
 
     private static long downloadId;
 
@@ -62,10 +79,11 @@ public class Downloader extends CordovaPlugin {
                     }
 
                     final Map<String,String> map = (Map<String,String>)msg.obj;
-                    if(map == null || map.get("fileName")==null){
+
+                    if(map == null || map.get("fileName")==null || map.get("url")==null){
                         AlertDialog.Builder builder = new AlertDialog.Builder(Downloader.this.cordova.getActivity());
                         builder.setMessage("获取文件信息失败！");
-                        builder.setTitle("提示ʾ");
+                        builder.setTitle("提示");
                         builder.setPositiveButton("确定", new DialogInterface.OnClickListener() {
                             @Override
                             public void onClick(DialogInterface dialog, int which) {
@@ -74,41 +92,78 @@ public class Downloader extends CordovaPlugin {
                         });
                         builder.create().show();
                     }else {
-                        AlertDialog.Builder builder = new AlertDialog.Builder(Downloader.this.cordova.getActivity());
-                        builder.setMessage("确认下载文件？\n文件名：" + map.get("fileName") + "\n文件大小：" + (map.get("length") == null ? "未知大小" : map.get("length")));
-                        builder.setTitle("提示ʾ");
-                        builder.setPositiveButton("确定", new DialogInterface.OnClickListener() {
-                            @Override
-                            public void onClick(DialogInterface dialog, int which) {
-                                Message msg1 = new Message();
-                                msg1.what = DOWNLOAD_FILE;
-                                msg1.obj = map;
-                                myHandler.sendMessage(msg1);
-                                dialog.dismiss();
-                            }
-                        });
-                        builder.setNegativeButton("取消", new DialogInterface.OnClickListener() {
-                            @Override
-                            public void onClick(DialogInterface dialog, int which) {
-                                dialog.dismiss();
-                            }
-                        });
-                        builder.create().show();
+
+                        String url = map.get("url");
+                        final String fid = url.substring(url.lastIndexOf("/")+1);
+                        Log.d(TAG,"fid:"+fid);
+                        if(isFileHasDwonloaded(fid)){//已经下载过文件
+                            AlertDialog.Builder builder = new AlertDialog.Builder(context);
+                            builder.setMessage("您已下载过：" + map.get("fileName"));
+                            builder.setTitle("提示");
+                            builder.setPositiveButton("打开", new DialogInterface.OnClickListener() {
+                                @Override
+                                public void onClick(DialogInterface dialog, int which) {
+                                    Message msg1 = new Message();
+                                    msg1.what = OPEN_FILE;
+                                    msg1.obj = sharedPreferences.getString(fid,null);
+                                    myHandler.sendMessage(msg1);
+                                    dialog.dismiss();
+                                }
+                            });
+                            builder.setNegativeButton("取消", new DialogInterface.OnClickListener() {
+                                @Override
+                                public void onClick(DialogInterface dialog, int which) {
+                                    dialog.dismiss();
+                                }
+                            });
+                            builder.create().show();
+                        }else {
+                            AlertDialog.Builder builder = new AlertDialog.Builder(context);
+                            builder.setMessage("确认下载文件？\n文件名：" + map.get("fileName") + "\n文件大小：" + (map.get("length") == null ? "未知大小" : map.get("length")));
+                            builder.setTitle("提示");
+                            builder.setPositiveButton("确定", new DialogInterface.OnClickListener() {
+                                @Override
+                                public void onClick(DialogInterface dialog, int which) {
+                                    Message msg1 = new Message();
+                                    msg1.what = DOWNLOAD_FILE;
+                                    msg1.obj = map;
+                                    myHandler.sendMessage(msg1);
+                                    dialog.dismiss();
+                                }
+                            });
+                            builder.setNegativeButton("取消", new DialogInterface.OnClickListener() {
+                                @Override
+                                public void onClick(DialogInterface dialog, int which) {
+                                    dialog.dismiss();
+                                }
+                            });
+                            builder.create().show();
+                        }
                     }
                     break;
                 case DOWNLOAD_FILE:
                     Map<String,String> map1 = (Map<String,String>)msg.obj;
                     download(Downloader.this.cordova.getActivity(),map1.get("url"),map1.get("fileName"));
                     break;
+                case OPEN_FILE:
+                    openFile(msg.obj.toString());
+                    break;
             }
             super.handleMessage(msg);
         }
     };
 
+    //插件初始化时会被调用，初始化context/sharedpreference
+    @Override
+    public void initialize(CordovaInterface cordova, CordovaWebView webView) {
+        super.initialize(cordova,webView);
+        context = this.cordova.getActivity();
+        sharedPreferences = context.getSharedPreferences(context.getPackageName(),Context.MODE_PRIVATE);
+    }
 
     @Override
     public boolean execute(String action, JSONArray args,final CallbackContext callbackContext) throws JSONException {
-        Context context = this.cordova.getActivity();
+
         if (action.equals(PLUGIN_ACTION)) {
             String url = args.getString(0);
             if(url!=null&&!url.equals("")){
@@ -122,6 +177,7 @@ public class Downloader extends CordovaPlugin {
         return false;
     }
 
+    //当前段调用Downloader.download方法时的处理函数
     private void download(Context context , final CallbackContext callbackContext,String url){
         CookieManager cookieManager = CookieManager.getInstance();
         session = cookieManager.getCookie(url);
@@ -142,6 +198,7 @@ public class Downloader extends CordovaPlugin {
         }).start();
     }
 
+    //根据文件的url和name下载文件
     public void download(Context context,String url,String name){
         manager =(DownloadManager)context.getSystemService(Context.DOWNLOAD_SERVICE);
         DownloadManager.Query query = new DownloadManager.Query();
@@ -167,7 +224,7 @@ public class Downloader extends CordovaPlugin {
                 down.addRequestHeader("Cookie", cookieStr + "; AcSe=0");
             }
 
-            down.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_MOBILE|DownloadManager.Request.NETWORK_WIFI);
+            down.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_MOBILE | DownloadManager.Request.NETWORK_WIFI);
             down.setVisibleInDownloadsUi(true);
             down.setTitle(name);
             down.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE);
@@ -177,20 +234,41 @@ public class Downloader extends CordovaPlugin {
             }else{
                 //down.setDestinationInExternalPublicDir();
             }*/
-            //isFolderExist(EXTERNAL_DIR);
+            isFolderExist(EXTERNAL_DIR);
             down.setDestinationInExternalPublicDir(EXTERNAL_DIR, name);
             downloadId = manager.enqueue(down);
+
+            sharedPreferences.edit().putString(String.valueOf(downloadId),url.substring(url.lastIndexOf("/")+1)).commit();
+
             Toast.makeText(context, "开始下载...", Toast.LENGTH_SHORT).show();
         }
     }
 
-    private static final String EXTERNAL_DIR = "Download";
+    //打开文件的方法
+    private void openFile(String path){
+        File file  = new File(path);
+        if(file.exists()){
+            Intent intent = new Intent();
+            intent.setAction("android.intent.action.VIEW");
+            intent.addCategory("android.intent.category.DEFAULT");
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 
+            String type = DownloadUtil.getMIMEType(file);
+            intent.setDataAndType(Uri.fromFile(file),type);
+            context.startActivity(intent);
+        }else{
+            Toast.makeText(context,"文件不存在！",Toast.LENGTH_SHORT).show();
+        }
+
+    }
+
+    //判断文件夹是否存在，不存在则创建
     private boolean isFolderExist(String dir) {
         File folder = Environment.getExternalStoragePublicDirectory(dir);
         return (folder.exists() && folder.isDirectory()) ? true : folder.mkdirs();
     }
 
+    //根据response头获取文件名和大小
     public  Map<String,String> getFileName(String url) {
         Map<String,String> map = new HashMap<String, String>();
         String filename = "";
@@ -210,7 +288,7 @@ public class Downloader extends CordovaPlugin {
                 if(header.getKey()==null) continue;
                 if (header.getKey().equals("File-Size")) {
                     length = header.getValue().get(0);
-                    map.put("length", convertFileSize(Integer.parseInt(length)));
+                    map.put("length", DownloadUtil.convertFileSize(Integer.parseInt(length)));
                 } else if (header.getKey().equals("Content-Disposition")) {
                     String content = header.getValue().get(0);
                     content = content.substring(content.indexOf("filename") + "filename".length());
@@ -225,21 +303,21 @@ public class Downloader extends CordovaPlugin {
         return map;
     }
 
-    public static String convertFileSize(long size) {
-        long kb = 1024;
-        long mb = kb * 1024;
-        long gb = mb * 1024;
-
-        if (size >= gb) {
-            return String.format("%.1f GB", (float) size / gb);
-        } else if (size >= mb) {
-            float f = (float) size / mb;
-            return String.format(f > 100 ? "%.0f MB" : "%.1f MB", f);
-        } else if (size >= kb) {
-            float f = (float) size / kb;
-            return String.format(f > 100 ? "%.0f KB" : "%.1f KB", f);
-        } else
-            return String.format("%d B", size);
+    //判断文件是否下载过
+    private boolean isFileHasDwonloaded(String fid){
+        if(null != fid){
+            String fileName = sharedPreferences.getString(fid,null);
+            Log.d(TAG,"fileName:"+fileName);
+            if(fileName == null){
+                return false;
+            }else if(new File(fileName).exists()){
+                return true;
+            }else {
+                return false;
+            }
+        }else{
+            return false;
+        }
     }
 
 }
